@@ -9,7 +9,7 @@ import os
 import argparse
 from pathlib import Path
 
-from utils import load_pgn, get_section_from_level
+from utils import load_pgn, get_section_from_level, strip_comment
 
 
 class PgnBook:
@@ -45,7 +45,7 @@ class PgnBook:
         # can be found in an online analysis tool. Usually lichess
         latex += "\\thispagestyle{fancy} \n"
         latex += "\\rhead{"
-        latex += "\\qrcode{" + game.headers["Site"] + "} } \n \n"
+        latex += "\\qrcode{" + game.headers["Site"] + "}}\n"
 
         # When exporting a game instead of a "study"
         if self.add_players:
@@ -99,17 +99,18 @@ class PgnBook:
 
         # If we start a variation we add the starting comment to the text
         if node.starts_variation:
-            latex += node.starting_comment + "\n \n"
+            latex += strip_comment(node.starting_comment)
 
         # node.variations contains the mainline at index 0,
         # If it has variations from here, ie more than 1 variation
         # We display the moves we have stacked until now
         # And we start a bullet point list, one entry per possible variations
         # from here
+        stripped_comment = strip_comment(node.comment)
         if len(node.variations) > 1:
             board_save = copy.deepcopy(board)
             latex += "\\variation{" + board.variation_san(current_var) + "} \n"
-            latex += node.comment + "\n"
+            latex += stripped_comment + "\n"
             for mv in current_var:
                 board_save.push(mv)
             latex += "\\begin{variants} \n"
@@ -117,20 +118,21 @@ class PgnBook:
             # Already taken care of in the mainline
             if not first:
                 latex += (
-                    "\\item " + self.walk_variation([], board_save, node.next()) + "\n"
+                    "\\item " +
+                    self.walk_variation([], board_save, node.next()) + "\n"
                 )
             # Add an entry per possible variations
             for v in node.variations[1:]:
-                latex += "\\item " + self.walk_variation([], board_save, v)
+                latex += "\\item" + self.walk_variation([], board_save, v)
             latex += "\\end{variants} \n"
         # If there is a comment here, we flush the moves stacked untile now
         # we add the comment in the middle of the variation and then continue
-        elif node.comment and not first:
+        elif stripped_comment and not first:
             board_save = copy.deepcopy(board)
             latex += "\\variation{" + board.variation_san(current_var) + "} \n"
             node.set_arrows([])
             node.set_eval(score=None)
-            latex += node.comment + "\n"
+            latex += stripped_comment + "\n"
             for mv in current_var:
                 board_save.push(mv)
             next_node = node.next()
@@ -146,7 +148,8 @@ class PgnBook:
                 if next_node is not None:
                     latex += self.walk_variation(current_var, board, next_node)
                 else:
-                    latex += "\\variation{" + board.variation_san(current_var) + "} \n"
+                    latex += "\\variation{" + \
+                        board.variation_san(current_var) + "} \n"
             else:
                 return ""
 
@@ -196,8 +199,11 @@ class PgnBook:
             to_push.append(node.move)
             # If we want to display something
             node.set_eval(score=None)
-            if node.comment or (len(node.variations) > 1) or node.is_end():
-                latex += "\\mainline{" + board.variation_san(to_push) + "} \n \n"
+            stripped_comment = strip_comment(node.comment)
+            # print("%" + node.comment + "|" + stripped_comment)
+            if stripped_comment or (len(node.variations) > 1) or node.is_end():
+                latex += "\\mainline{" + \
+                    board.variation_san(to_push) + "} \n \n"
                 arrows = node.arrows()
                 node.set_arrows([])
                 for m in to_push:
@@ -227,7 +233,7 @@ class PgnBook:
                 latex += "]"
 
                 # Add comment on the right column
-                latex += " & " + node.comment + "\n \n"
+                latex += " & " + stripped_comment + "\n \n"
 
                 # We make a copy of the board not to perturb recursive calls
                 boardt = copy.deepcopy(board)
@@ -305,7 +311,8 @@ if __name__ == "__main__":
     template = Template(template)
 
     frontpage = (
-        ("\\includepdf[pages=1, noautoscale]{%s}" % os.path.abspath(args.front_page))
+        ("\\includepdf[pages=1, noautoscale]{%s}" %
+         os.path.abspath(args.front_page))
         if args.front_page
         else ""
     )
@@ -317,7 +324,8 @@ if __name__ == "__main__":
 
         with open(args.output, "w") as fd:
             fd.write(
-                template.substitute(frontpage=frontpage, content=book.singles()[0])
+                template.substitute(frontpage=frontpage,
+                                    content=book.singles()[0])
             )
 
     # When exporting a whole study it uses a book class and a chapter for each game
@@ -325,8 +333,10 @@ if __name__ == "__main__":
         book = PgnBook(args.file, book=True, players=args.players)
 
         with open(args.output, "w") as fd:
-            fd.write(template.substitute(frontpage=frontpage, content=book.latex()))
+            fd.write(template.substitute(
+                frontpage=frontpage, content=book.latex()))
     if args.mode == "study":
         book = PgnBook(args.file, book=True)
         with open(args.output, "w") as fd:
-            fd.write(template.substitute(frontpage=frontpage, content=book.latex()))
+            fd.write(template.substitute(
+                frontpage=frontpage, content=book.latex()))

@@ -29,3 +29,21 @@ def get_section_from_level(title, level, book=False) -> str:
         return "\\subsubsection{" + title + "}"
     else:
         return title + "."
+
+
+def strip_comment(test_str):
+    ret = ''
+    skip1c = 0
+    skip2c = 0
+    for i in test_str:
+        if i == '[':
+            skip1c += 1
+        elif i == '(':
+            skip2c += 1
+        elif i == ']' and skip1c > 0:
+            skip1c -= 1
+        elif i == ')' and skip2c > 0:
+            skip2c -= 1
+        elif skip1c == 0 and skip2c == 0:
+            ret += i
+    return ret.strip()
